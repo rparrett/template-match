@@ -1,5 +1,5 @@
 [package]
-name = "template_search"
+name = "template_match"
 version = "0.1.0"
 authors = ["Rob Parrett <robparrett@gmail.com>"]
 
