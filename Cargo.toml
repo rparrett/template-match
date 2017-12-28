@@ -1,0 +1,10 @@
+[package]
+name = "template_search"
+version = "0.1.0"
+authors = ["Rob Parrett <robparrett@gmail.com>"]
+
+[dependencies]
+winapi = { version = "0.3", features = ["wingdi", "winuser"] }
+image = "0.18"
+imageproc = "0.13"
+conv = "0.3"
