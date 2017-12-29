@@ -143,8 +143,8 @@ where
     let n_w = needle.width();
     let n_h = needle.height();
 
-    for x in 0..(h_w - n_w) {
-        for y in 0..(h_h - n_h) {
+    for x in 0..(h_w - n_w + 1) {
+        for y in 0..(h_h - n_h + 1) {
             let subimg = imageops::crop(haystack, x, y, n_w, n_h);
 
             let rms = imageproc::stats::root_mean_squared_error(&subimg, needle);
