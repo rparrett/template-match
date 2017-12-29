@@ -2,6 +2,9 @@ extern crate winapi;
 extern crate image;
 extern crate imageproc;
 extern crate conv;
+extern crate libc;
+
+use libc::c_char;
 
 use winapi::um::winuser::{GetDesktopWindow, GetClientRect, GetDC, ReleaseDC};
 use winapi::um::wingdi::{CreateCompatibleDC, CreateCompatibleBitmap, DeleteObject, DeleteDC, SelectObject, BitBlt, GetDIBits, SRCCOPY, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, RGBQUAD};
@@ -11,6 +14,9 @@ use winapi::ctypes::c_void;
 
 use std::mem::zeroed;
 use std::mem::size_of;
+
+use std::ffi::CStr;
+use std::ffi::CString;
 
 use image::{imageops, GenericImage, Pixel, Primitive, ImageBuffer};
 use conv::ValueInto;
@@ -37,18 +43,11 @@ impl From<Screenshot> for ImageBuffer<image::Rgb<u8>, std::vec::Vec<u8>> {
 }
 
 #[derive(Debug)]
-pub struct FindColorResult {
-    x: u32,
-    y: u32,
-    err: String
-}
-
-#[derive(Debug)]
+#[repr(C)]
 pub struct TemplateMatchResult {
     x: u32,
     y: u32,
-    rms: f64,
-    err: String
+    rms: f64
 }
 
 fn get_screenshot() -> Result<Screenshot, &'static str> {
@@ -77,7 +76,7 @@ fn get_screenshot() -> Result<Screenshot, &'static str> {
 
         let result = BitBlt(h_capture_dc, 0, 0, w, h, h_screen_dc, rect.left, rect.top, SRCCOPY);
         if result == 0 {
-            // TODO GetLastError
+            // TODO GetLastError?
             
             SelectObject(h_capture_dc, h_old_gdiobj);
             DeleteDC(h_capture_dc);
@@ -136,124 +135,96 @@ where
     S: Primitive + 'static,
     P::Subpixel: ValueInto<f64>,
 {
-    let mut min = std::f64::MAX;
-    let mut minx = 0;
-    let mut miny = 0;
+    let mut min_rms = std::f64::MAX;
+    let mut min_x = 0;
+    let mut min_y = 0;
 
-    let hw = (*haystack).width();
-    let hh = (*haystack).height();
-    let nw = (*needle).width();
-    let nh = (*needle).height();
+    let h_w = haystack.width();
+    let h_h = haystack.height();
+    let n_w = needle.width();
+    let n_h = needle.height();
 
-    for x in 0..(hw - nw) {
-        for y in 0..(hh - nh) {
-            let subimg = imageops::crop(haystack, x, y, nw, nh);
+    for x in 0..(h_w - n_w) {
+        for y in 0..(h_h - n_h) {
+            let subimg = imageops::crop(haystack, x, y, n_w, n_h);
 
             let rms = imageproc::stats::root_mean_squared_error(&subimg, needle);
 
-            if rms < min {
-                min = rms;
-                minx = x;
-                miny = y;
+            if rms < min_rms {
+                min_rms = rms;
+                min_x = x;
+                min_y = y;
             }
         }
     }
 
-    (minx, miny, min)
+    (min_x, min_y, min_rms)
 }
 
 #[no_mangle]
-pub extern "stdcall" fn template_match(filename: &'static str) -> TemplateMatchResult {
-    let s = get_screenshot();
+pub extern "stdcall" fn template_match(raw_filename: *const c_char, raw_result: *mut TemplateMatchResult) -> u32 {
+    if raw_result.is_null() {
+        return 1
+    }
 
-    let s = match s {
+    let result = unsafe { &mut *raw_result };
+
+    if raw_filename.is_null() {
+        return 2
+    }
+
+    let c_str = unsafe { CStr::from_ptr(raw_filename) };
+    
+    let filename = match c_str.to_str() {
+        Ok(f) => f,
+        Err(_) => return 3
+    };
+
+    let s = match get_screenshot() {
         Ok(s) => s,
-        Err(e) => {
-            return TemplateMatchResult {
-                x: 0,
-                y: 0,
-                rms: 0.0f64,
-                err: format!("Failed to get screenshot: {}", e).into()
-            }            
-        }
+        Err(_) => return 4
     };
 
     let mut haystack: ImageBuffer<image::Rgb<u8>, std::vec::Vec<u8>> = s.into();
 
-    let needle = image::open(filename);
-
-    let needle = match needle {
+    let needle = match image::open(filename) {
         Ok(needle) => needle,
-        _ => {
-            return TemplateMatchResult {
-                x: 0,
-                y: 0,
-                rms: 0.0f64,
-                err: "Failed to open needle.".into()
-            }               
-        }
+        Err(_) => return 5
     };
 
     let needle = needle.to_rgb();
 
     let res = template_match_images(&mut haystack, &needle);
 
-    TemplateMatchResult {
-        x: res.0,
-        y: res.1,
-        rms: res.2,
-        err: "".into()
-    }    
-}
+    result.x = res.0;
+    result.y = res.1;
+    result.rms = res.2;
 
-#[no_mangle]
-pub extern "stdcall" fn find_color(r: u8, b: u8, g: u8, _t: u8) -> FindColorResult {
-    let s = get_screenshot();
-
-    let s = match s {
-        Ok(s) => s,
-        Err(e) => {
-            return FindColorResult {
-                x: 0,
-                y: 0,
-                err: format!("Failed to get screenshot: {}", e).into()
-            }            
-        }
-    };
-
-    for i in 0..(s.w * s.h) {
-        if s.data[i as usize].rgbRed == r && s.data[i as usize].rgbBlue == b && s.data[i as usize].rgbGreen == g {
-            let x = i % s.w;
-            let y = (i - x) / s.w;
-
-            return FindColorResult { x: x as u32, y: y as u32, err: "".into()};
-        }
-    }
-
-    FindColorResult {
-        x: 0,
-        y: 0,
-        err: "Not found.".into()
-    }
+    0
 }
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn test_find_color() {
-        use super::*;
-
-        let c = find_color(0, 0, 0, 0);
-
-        println!("{:?}", c);
-    }
+    // TODO test template_match_images
 
     #[test]
     fn test_template_match() {
         use super::*;
 
-        let c = template_match("wayoff.png");
+        let mut r = TemplateMatchResult {
+            x: 0,
+            y: 0,
+            rms: 0.0f64
+        };
 
-        println!("{:?}", c);
+        let f = CString::new("resources/test-needle.png").unwrap();
+        let f_ptr = f.as_ptr();
+
+        let res = template_match(f_ptr, &mut r);
+
+        println!("{:?}", r);
+        println!("{:?}", res);
+
+        assert!(r.rms > 1.0);
     }
 }

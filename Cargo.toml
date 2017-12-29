@@ -8,3 +8,10 @@ winapi = { version = "0.3", features = ["wingdi", "winuser"] }
 image = "0.18"
 imageproc = "0.13"
 conv = "0.3"
+libc = "0.2"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = true
