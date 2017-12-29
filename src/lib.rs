@@ -7,7 +7,9 @@ extern crate libc;
 use libc::c_char;
 
 use winapi::um::winuser::{GetDesktopWindow, GetClientRect, GetDC, ReleaseDC};
-use winapi::um::wingdi::{CreateCompatibleDC, CreateCompatibleBitmap, DeleteObject, DeleteDC, SelectObject, BitBlt, GetDIBits, SRCCOPY, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, RGBQUAD};
+use winapi::um::wingdi::{CreateCompatibleDC, CreateCompatibleBitmap, DeleteObject, DeleteDC,
+                         SelectObject, BitBlt, GetDIBits, SRCCOPY, BITMAPINFO, BITMAPINFOHEADER,
+                         BI_RGB, DIB_RGB_COLORS, RGBQUAD};
 use winapi::shared::windef::{HBITMAP, HDC, HGDIOBJ, HWND, RECT};
 use winapi::_core::ptr::null_mut;
 use winapi::ctypes::c_void;
@@ -23,7 +25,7 @@ use conv::ValueInto;
 struct Screenshot {
     data: Vec<RGBQUAD>,
     w: u32,
-    h: u32
+    h: u32,
 }
 
 impl From<Screenshot> for ImageBuffer<image::Rgb<u8>, std::vec::Vec<u8>> {
@@ -35,9 +37,9 @@ impl From<Screenshot> for ImageBuffer<image::Rgb<u8>, std::vec::Vec<u8>> {
                 screenshot.data[i as usize].rgbRed,
                 screenshot.data[i as usize].rgbGreen,
                 screenshot.data[i as usize].rgbBlue,
-                255u8
+                255u8,
             )
-        })        
+        })
     }
 }
 
@@ -46,20 +48,20 @@ impl From<Screenshot> for ImageBuffer<image::Rgb<u8>, std::vec::Vec<u8>> {
 pub struct TemplateMatchResult {
     x: u32,
     y: u32,
-    rms: f64
+    rms: f64,
 }
 
 fn get_screenshot() -> Result<Screenshot, &'static str> {
     unsafe {
         let hwnd_desktop: HWND = GetDesktopWindow();
-        
+
         let mut rect = zeroed::<RECT>();
 
         let result = GetClientRect(hwnd_desktop, &mut rect);
         if result == 0 {
             // TODO GetLastError
-            
-            return Err("GetClientRect failed.")
+
+            return Err("GetClientRect failed.");
         }
 
         let w = rect.right - rect.left;
@@ -73,16 +75,26 @@ fn get_screenshot() -> Result<Screenshot, &'static str> {
 
         let h_old_gdiobj: HGDIOBJ = SelectObject(h_capture_dc, h_capture_bitmap as *mut c_void);
 
-        let result = BitBlt(h_capture_dc, 0, 0, w, h, h_screen_dc, rect.left, rect.top, SRCCOPY);
+        let result = BitBlt(
+            h_capture_dc,
+            0,
+            0,
+            w,
+            h,
+            h_screen_dc,
+            rect.left,
+            rect.top,
+            SRCCOPY,
+        );
         if result == 0 {
             // TODO GetLastError?
-            
+
             SelectObject(h_capture_dc, h_old_gdiobj);
             DeleteDC(h_capture_dc);
             ReleaseDC(null_mut(), h_screen_dc);
             DeleteObject(h_capture_bitmap as *mut c_void);
 
-            return Err("BitBlt failed.")
+            return Err("BitBlt failed.");
         }
 
         let mut buf = vec![0u8; size_of::<BITMAPINFO>()];
@@ -101,15 +113,23 @@ fn get_screenshot() -> Result<Screenshot, &'static str> {
                 rgbBlue: 0,
                 rgbGreen: 0,
                 rgbRed: 0,
-                rgbReserved: 0
+                rgbReserved: 0,
             })
         }
 
-        let result = GetDIBits(h_capture_dc, h_capture_bitmap, 0, h as u32, quads.as_mut_ptr() as *mut c_void, bmi, DIB_RGB_COLORS);
+        let result = GetDIBits(
+            h_capture_dc,
+            h_capture_bitmap,
+            0,
+            h as u32,
+            quads.as_mut_ptr() as *mut c_void,
+            bmi,
+            DIB_RGB_COLORS,
+        );
         if result < 1 {
             // TODO GetLastError?
-            
-            return Err("GetDIBits failed.")
+
+            return Err("GetDIBits failed.");
         }
 
         // cleanup
@@ -122,7 +142,7 @@ fn get_screenshot() -> Result<Screenshot, &'static str> {
         Ok(Screenshot {
             data: quads,
             w: w as u32,
-            h: h as u32
+            h: h as u32,
         })
     }
 }
@@ -161,34 +181,37 @@ where
 }
 
 #[no_mangle]
-pub extern "stdcall" fn template_match(raw_filename: *const c_char, raw_result: *mut TemplateMatchResult) -> u32 {
+pub extern "stdcall" fn template_match(
+    raw_filename: *const c_char,
+    raw_result: *mut TemplateMatchResult,
+) -> u32 {
     if raw_result.is_null() {
-        return 1
+        return 1;
     }
 
     let result = unsafe { &mut *raw_result };
 
     if raw_filename.is_null() {
-        return 2
+        return 2;
     }
 
     let c_str = unsafe { CStr::from_ptr(raw_filename) };
-    
+
     let filename = match c_str.to_str() {
         Ok(f) => f,
-        Err(_) => return 3
+        Err(_) => return 3,
     };
 
     let s = match get_screenshot() {
         Ok(s) => s,
-        Err(_) => return 4
+        Err(_) => return 4,
     };
 
     let mut haystack: ImageBuffer<image::Rgb<u8>, std::vec::Vec<u8>> = s.into();
 
     let needle = match image::open(filename) {
         Ok(needle) => needle,
-        Err(_) => return 5
+        Err(_) => return 5,
     };
 
     let needle = needle.to_rgb();
@@ -209,13 +232,13 @@ mod tests {
         use super::*;
         use std::ffi::CString;
 
-        // Will fail if the test pattern is open in an image editor on your 
+        // Will fail if the test pattern is open in an image editor on your
         // screen!
 
         let mut r = TemplateMatchResult {
             x: 0,
             y: 0,
-            rms: 0.0f64
+            rms: 0.0f64,
         };
 
         let f = CString::new("resources/test-needle.png").unwrap();
@@ -261,10 +284,9 @@ mod tests {
         let res = template_match_images(&mut haystack, &needle);
 
         // Fuzzy test haystack has 4 wrong pixels
-        
+
         let mut sum_squared_diffs = 0f64;
-        sum_squared_diffs += 
-            (255f64 * 255f64 * 3f64) + // White - Black
+        sum_squared_diffs += (255f64 * 255f64 * 3f64) + // White - Black
             (255f64 * 255f64 * 2f64) + // White - Red                        
             (255f64 * 255f64 * 2f64) + // White - Green
             (255f64 * 255f64 * 2f64); // White - Blue
@@ -285,5 +307,5 @@ mod tests {
         let res = template_match_images(&mut haystack, &needle);
 
         assert!(res == (0, 0, 0.0f64));
-    }    
-}    
+    }
+}
