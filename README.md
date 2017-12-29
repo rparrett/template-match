@@ -24,25 +24,25 @@ cp au3/template-match.au3 autoit_project_directory
 
 ### Usage
 
-```
-	; usage.au3
-    
+```AutoIt
+    ; usage.au3
+
     #include <template-match.au3>
-    
-	$error = TemplateMatch("needle.png")
+
+    $error = TemplateMatch("needle.png")
     ; $error = TemplateMatchRect("needle.png", $x, $y, $w, $h);
 
     If ($error != 0) Then
-    	ConsoleWrite("Error #" & $error & @CRLF)
-    	Return
+        ConsoleWrite("Error #" & $error & @CRLF)
+        Return
     EndIf
 
-	ConsoleWrite("Best X " & $result[0] & @CRLF)
-	ConsoleWrite("Best Y " & $result[1] & @CRLF)
-	ConsoleWrite("Root Mean Square Error " & $result[2] & @CRLF)
-      
+    ConsoleWrite("Best X " & $result[0] & @CRLF)
+    ConsoleWrite("Best Y " & $result[1] & @CRLF)
+    ConsoleWrite("Root Mean Square Error " & $result[2] & @CRLF)
+
     If ($rms < 10.0) Then
-    	Console.Write("Found a good match!" & @CRLF)
+        Console.Write("Found a good match!" & @CRLF)
     EndIf
 ```
 
