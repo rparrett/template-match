@@ -45,6 +45,15 @@ impl From<Screenshot> for ImageBuffer<image::Rgb<u8>, std::vec::Vec<u8>> {
 
 #[derive(Debug)]
 #[repr(C)]
+pub struct Rect {
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32
+}
+
+#[derive(Debug)]
+#[repr(C)]
 pub struct TemplateMatchResult {
     x: u32,
     y: u32,
@@ -183,6 +192,7 @@ where
 #[no_mangle]
 pub extern "stdcall" fn template_match(
     raw_filename: *const c_char,
+    raw_rect: *const Rect,
     raw_result: *mut TemplateMatchResult,
 ) -> u32 {
     if raw_result.is_null() {
@@ -216,12 +226,24 @@ pub extern "stdcall" fn template_match(
 
     let needle = needle.to_rgb();
 
-    let res = template_match_images(&mut haystack, &needle);
+    if !raw_rect.is_null() {
+        let rect = unsafe { & *raw_rect };
 
-    result.x = res.0;
-    result.y = res.1;
-    result.rms = res.2;
+        haystack = imageops::crop(&mut haystack, rect.x, rect.y, rect.w, rect.h).to_image();
 
+        let res = template_match_images(&mut haystack, &needle);
+
+        result.x = rect.x + res.0;
+        result.y = rect.y + res.1;
+        result.rms = res.2;
+    } else {
+        let res = template_match_images(&mut haystack, &needle);
+
+        result.x = res.0;
+        result.y = res.1;
+        result.rms = res.2;
+    }
+     
     0
 }
 
@@ -244,11 +266,34 @@ mod tests {
         let f = CString::new("resources/test-needle.png").unwrap();
         let f_ptr = f.as_ptr();
 
-        let res = template_match(f_ptr, &mut r);
+        let res = template_match(f_ptr, std::ptr::null(), &mut r);
 
         assert!(res == 0);
         assert!(r.rms > 0.0f64);
     }
+
+    #[test]
+    fn test_template_match_rect() {
+        use super::*;
+        use std::ffi::CString;
+
+        // Will fail if the test pattern is open in an image editor on your
+        // screen!
+
+        let mut r = TemplateMatchResult {
+            x: 0,
+            y: 0,
+            rms: 0.0f64,
+        };
+
+        let f = CString::new("resources/test-needle.png").unwrap();
+        let f_ptr = f.as_ptr();
+
+        let res = template_match(f_ptr, &Rect { x: 0, y: 0, w: 100, h: 100 }, &mut r);
+
+        assert!(res == 0);
+        assert!(r.rms > 0.0f64);
+    }    
 
     #[test]
     fn test_template_match_images() {
