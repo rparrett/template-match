@@ -204,11 +204,13 @@ pub extern "stdcall" fn template_match(raw_filename: *const c_char, raw_result: 
 
 #[cfg(test)]
 mod tests {
-    // TODO test template_match_images
-
     #[test]
     fn test_template_match() {
         use super::*;
+        use std::ffi::CString;
+
+        // Will fail if the test pattern is open in an image editor on your 
+        // screen!
 
         let mut r = TemplateMatchResult {
             x: 0,
@@ -221,9 +223,67 @@ mod tests {
 
         let res = template_match(f_ptr, &mut r);
 
-        println!("{:?}", r);
-        println!("{:?}", res);
-
-        assert!(r.rms > 1.0);
+        assert!(res == 0);
+        assert!(r.rms > 0.0f64);
     }
-}
+
+    #[test]
+    fn test_template_match_images() {
+        use super::*;
+
+        let mut haystack = image::open("resources/test-haystack.png").unwrap();
+        let needle = image::open("resources/test-needle.png").unwrap();
+
+        let res = template_match_images(&mut haystack, &needle);
+
+        assert!(res == (32, 24, 0.0f64));
+    }
+
+    #[test]
+    fn test_template_match_images_bottomright() {
+        use super::*;
+
+        let mut haystack = image::open("resources/test-haystack-bottomright.png").unwrap();
+        let needle = image::open("resources/test-needle.png").unwrap();
+
+        let res = template_match_images(&mut haystack, &needle);
+
+        assert!(res == (54, 41, 0.0f64));
+    }
+
+    #[test]
+    fn test_template_match_images_fuzzy() {
+        use super::*;
+
+        let mut haystack = image::open("resources/test-haystack-fuzzy.png").unwrap();
+        let needle = image::open("resources/test-needle.png").unwrap();
+
+        let res = template_match_images(&mut haystack, &needle);
+
+        // Fuzzy test haystack has 4 wrong pixels
+        
+        let mut sum_squared_diffs = 0f64;
+        sum_squared_diffs += 
+            (255f64 * 255f64 * 3f64) + // White - Black
+            (255f64 * 255f64 * 2f64) + // White - Red                        
+            (255f64 * 255f64 * 2f64) + // White - Green
+            (255f64 * 255f64 * 2f64); // White - Blue
+
+        let count = (needle.width() * needle.height() * 4) as f64;
+        let rms = (sum_squared_diffs / count).sqrt();
+
+        assert!(res == (32, 24, rms));
+    }
+
+    #[test]
+    fn test_template_match_images_same() {
+        use super::*;
+
+        let mut haystack = image::open("resources/test-needle.png").unwrap();
+        let needle = image::open("resources/test-needle.png").unwrap();
+
+        let res = template_match_images(&mut haystack, &needle);
+
+        assert!(res == (0, 0, 0.0f64));
+    }    
+}    
