@@ -16,7 +16,6 @@ use std::mem::zeroed;
 use std::mem::size_of;
 
 use std::ffi::CStr;
-use std::ffi::CString;
 
 use image::{imageops, GenericImage, Pixel, Primitive, ImageBuffer};
 use conv::ValueInto;
