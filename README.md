@@ -52,6 +52,7 @@ Main()
 
 ### TODO
 
+* Some way to return multiple matches with a threshold
 * Optionally pass a HWND
 * What's the situation with multiple displays?
 * Transparency
